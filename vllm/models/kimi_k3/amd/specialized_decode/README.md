@@ -13,14 +13,14 @@ peer memory.
   gathered to every rank's peer memory), AITER's MLA decode on this rank's KV
   shard, then K2, which runs M1b first (the LSE combine of every rank's partials,
   MXFP4 W_UV, the sigmoid gate). At DCP1 every rank holds the whole KV and an MLA
-  layer uses AITER's MLA decode for ordinary q=1. Speculative DCP1 instead has
-  M1a write a bf16 query, then K2 runs M1c (FlyDSL) and M1b merges M1c's KV
+  layer uses AITER's MLA decode for ordinary q=1. Speculative DCP1 with M1 instead
+  has M1a write a bf16 query, then K2 runs M1c (FlyDSL) and M1b merges M1c's KV
   splits. No gather and no AITER decode in that speculative path.
-- **FFN layers M1 cannot serve** (ordinary decode at DCP1 or DCP8, and
-  speculative decode at DCP8): vLLM's AttnRes and MLA attention ops write
-  o_proj's input, then K2. Causes include another MLA backend, a KV cache that is
-  not fp8 E4M3, `VLLM_ROCM_USE_AITER_FP4BMM` unset, or MLA weights M1 does not
-  read.
+- **FFN layers M1 cannot serve** (DCP1 or DCP8, ordinary or speculative decode):
+  vLLM's AttnRes and MLA attention ops write o_proj's input, then K2. Causes
+  include another MLA backend, a KV cache that is not fp8 E4M3 such as
+  Kimi-K3.1's `fp8_ds_mla`, `VLLM_ROCM_USE_AITER_FP4BMM` unset, or MLA weights M1
+  does not read.
 - **K2**: o_proj + all-reduce + MLP AttnRes, then the latent MoE (router,
   top-16, MXFP4 experts, shared experts, latent all-reduce + RMSNorm, up_proj,
   final all-reduce).
@@ -53,7 +53,7 @@ speculative decoding at decode context parallel 1 or 8, AITER
 (`VLLM_ROCM_USE_AITER=1`: K2's MoE is AITER's SiTU MXFP4 MoE), BF16 conv / FP32
 recurrent KDA states. For speculative decoding, `--max-num-seqs` is 1, 2, 4 or 8,
 with max_num_seqs x (num_speculative_tokens + 1) <= 16 (a full step is one
-launch). Speculative DCP1 runs M1c only: 3 or 7 speculative tokens,
+launch). Speculative DCP1 with M1 runs M1c only: 3 or 7 speculative tokens,
 max_num_seqs 1 or 2. M1 assumes no KV cache interleave (it writes the slots
 vLLM maps), but at DCP8 vLLM's AITER MLA backend serves DSpark at interleave 1
 only.
@@ -61,9 +61,8 @@ only.
 M1 also needs the `ROCM_AITER_MLA` attention backend (it reads AITER MLA's decode
 metadata), an fp8 E4M3 KV cache (`fp8` or `fp8_e4m3`) and MLA's W_UK / W_UV as
 AITER MXFP4 bmms (`VLLM_ROCM_USE_AITER_FP4BMM=1`). Without them the MLA layers
-run vLLM's attention ops, then K2, and startup logs why. That fallback supports
-ordinary decode at DCP1 or DCP8 and speculative decode at DCP8; speculative
-DCP1 requires M1. The KDA layers run K1 and K2 either way.
+run vLLM's attention ops, then K2, at DCP1 and DCP8 (ordinary or speculative
+decode), and startup logs why. The KDA layers run K1 and K2 either way.
 
 KV transfer support is limited to built-in MoRIIO READ and WRITE consumers and
 the built-in Mooncake consumer.
