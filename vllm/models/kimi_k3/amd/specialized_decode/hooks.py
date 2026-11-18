@@ -3,8 +3,9 @@
 """The specialized decode's hooks on `KimiLinearForCausalLM`, kept here so the
 model only calls them: `init_specialized_decode` in `__init__` (after the config
 check, which runs before any module allocates weights), `plan_specialized_decode`
-in `forward` and `after_specialized_decode_step` in `compute_logits`. The
-model state (`model_state.KimiK3ModelState`) builds the executor after load."""
+in `forward` and `after_specialized_decode_step` in `compute_logits` and
+`compute_logits_local`. The model state (`model_state.KimiK3ModelState`) builds
+the executor after load."""
 
 from typing import TYPE_CHECKING
 

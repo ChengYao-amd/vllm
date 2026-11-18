@@ -1378,6 +1378,14 @@ class KimiLinearForCausalLM(
         hidden_states = self.model.norm(hidden_states, None)
         return self.logits_processor(self.lm_head, hidden_states)
 
+    def compute_logits_local(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """This TP rank's vocab shard of the logits, for batch-sharded sampling:
+        `compute_logits` without the gather. The model runner calls one of the
+        two per step, so the per-step work stays here as well."""
+        self.after_specialized_decode_step()
+        hidden_states = self.model.norm(hidden_states, None)
+        return self.logits_processor(self.lm_head, hidden_states, skip_gather=True)
+
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         loader = AutoWeightsLoader(self)
         return loader.load_weights(weights)

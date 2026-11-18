@@ -119,11 +119,12 @@ Every in-kernel wait gives up after 10 s. The rank records the wait in its healt
 words (sticky: its later waits exit at once) and stops waiting, so a stalled peer
 fails every rank instead of hanging them.
 
-Each step, `compute_logits` queues a non-blocking copy of the rank's `FAILED`
-word. Every 16 steps the TP ranks agree on what has landed over the TP CPU group,
-and then every rank raises at the same step, so the engine stops. They must stop
-together: a rank that raised alone would leave the others waiting in the next
-collective (the drafter's) for ever.
+Each step, `compute_logits` (`compute_logits_local` under batch-sharded
+sampling) queues a non-blocking copy of the rank's `FAILED` word. Every 16 steps
+the TP ranks agree on what has landed over the TP CPU group, and then every rank
+raises at the same step, so the engine stops. They must stop together: a rank
+that raised alone would leave the others waiting in the next collective (the
+drafter's) for ever.
 
 Detection takes up to about 16 steps, so tokens of the failed steps can reach the
 client before the engine stops. A zero-delay check needs a core hook and is left to
@@ -137,8 +138,8 @@ a served model and checks that the engine stops.
 Everything lives in this folder. The model files only call in: `linear.py`
 (the config check in `__init__`, `plan_specialized_decode` in `forward`,
 `step.layer(i)` in the layer loop, `after_specialized_decode_step` in
-`compute_logits`), `model.py` (`get_model_state_cls`) and `mla.py`
-(`skip_o_proj`). Nothing outside the model changes: M1a writes the query
+`compute_logits` and `compute_logits_local`), `model.py` (`get_model_state_cls`)
+and `mla.py` (`skip_o_proj`). Nothing outside the model changes: M1a writes the query
 AITER's cprr decode pads to (e.g. 96 -> 128 heads), and `runtime/mla.py` hands
 it to `forward_mqa` in place of the backend's padding copy.
 
